@@ -4,54 +4,45 @@ using UnityEditor.Tilemaps;
 using UnityEditorInternal;
 using UnityEngine;
 
-public class Player : MonoBehaviour
+public class Player : Entity
 {
-    private Rigidbody2D rb;
-    private Animator animator;
-
+    [Header("Move info")]
     [SerializeField] private float moveSpeed;
     [SerializeField] private float jumpForce;
 
     [Header("Dash info")]
     [SerializeField] private float dashSpeed;
     [SerializeField] private float dashDuration;
-    [SerializeField] private float dashTime;
+    private float dashTime;
+
+    [SerializeField] private float dashCooldown;
+    private float dashCooldownTimer;
 
     [Header("Attack info")]
+    [SerializeField] private float comboTime = 0.3f;
+    private float comboTimeWindow;
     private bool isAttacking;
     private int combatCounter;
 
     private float xInput;
 
-    private int facingDir = 1;
-    private bool facingRight = true;
-
-    [Header("Collision info")]
-    [SerializeField] private float groundCheckDistance;
-    [SerializeField] private LayerMask whatIsGround;
-    private bool isGrounded;
-
-    // Start is called before the first frame update
-    void Start()
+    protected override void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        animator = GetComponentInChildren<Animator>();
+        base.Start();
     }
 
     // Update is called once per frame
-    void Update()
+    protected override void Update()
     {
+        base.Update();
+
         Movement();
 
         CheckInput();
-        CollisionChecks();
 
         dashTime -= Time.deltaTime;
-
-        if (Input.GetKeyDown(KeyCode.LeftShift))
-        {
-            dashTime = dashDuration;
-        }
+        dashCooldownTimer -= Time.deltaTime;
+        comboTimeWindow -= Time.deltaTime; 
 
         FilpController();
         AnimatorControllers();
@@ -64,10 +55,6 @@ public class Player : MonoBehaviour
         combatCounter++;
         combatCounter %= 3;
     }
-    private void CollisionChecks()
-    {
-        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance, whatIsGround);
-    }
 
     private void CheckInput()
     {
@@ -75,13 +62,39 @@ public class Player : MonoBehaviour
 
         if(Input.GetKeyDown(KeyCode.Mouse0))
         {
-            isAttacking = true;
+            StartAttackEvent();
         }
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
             Jump();
         }
+
+        if (Input.GetKeyDown(KeyCode.LeftShift))
+        {
+            DashAbility();
+        }
+    }
+
+    private void DashAbility()
+    {
+        if(dashCooldownTimer < 0 && !isAttacking)
+        {
+            dashCooldownTimer = dashCooldown;
+            dashTime = dashDuration;
+        }
+    }
+
+    private void StartAttackEvent()
+    {
+        if (!isGrounded)
+            return;
+
+        if (comboTimeWindow < 0)
+            combatCounter = 0;
+
+        isAttacking = true;
+        comboTimeWindow = comboTime;
     }
 
     private void AnimatorControllers()
@@ -97,9 +110,13 @@ public class Player : MonoBehaviour
 
     private void Movement()
     {
-        if(dashTime > 0)
+        if (isAttacking)
         {
-            rb.velocity = new Vector2(xInput * dashSpeed, 0);
+            rb.velocity = new Vector2();
+        }
+        else if (dashTime > 0)
+        {
+            rb.velocity = new Vector2(facingDir * dashSpeed, 0);
         }
         else
         {
@@ -112,23 +129,11 @@ public class Player : MonoBehaviour
         rb.velocity = new Vector2(rb.velocity.x, jumpForce);
     }
 
-    private void Flip()
-    {
-        facingDir = facingDir * -1;
-        facingRight = !facingRight;
-        transform.Rotate(0, 180, 0);
-    }
-
     private void FilpController()
     {
         if (rb.velocity.x > 0 && !facingRight)
             Flip();
         else if (rb.velocity.x < 0 && facingRight)
             Flip();
-    }
-
-    private void OnDrawGizmos()
-    {
-        Gizmos.DrawLine(transform.position, new Vector3(transform.position.x, transform.position.y - groundCheckDistance));
     }
 }
